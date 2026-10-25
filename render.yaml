@@ -1,0 +1,19 @@
+# Deploy no Render. Persistência de dados precisa de um disco (planos pagos);
+# no plano grátis os dados somem a cada reinício. Para grátis com persistência,
+# prefira o Fly.io ou Railway (ver README).
+services:
+  - type: web
+    name: grana-casal
+    runtime: node
+    plan: starter
+    buildCommand: ""
+    startCommand: node --no-warnings server/index.js
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      - key: GRANA_SECRET
+        generateValue: true
+    disk:
+      name: grana-data
+      mountPath: /var/data
+      sizeGB: 1

@@ -1,15 +1,16 @@
 {
-  "name": "grana-user-login-data",
-  "version": "1.0.0",
-  "description": "Repositorio de dados de login dos usuarios do app Grana. Armazena credenciais com hash seguro (scrypt) e perfil do usuario.",
+  "name": "grana-casal",
+  "version": "2.0.0",
+  "description": "Grana — app de contas para casais, com contas reais, convite por código e sincronização em tempo real. Backend e frontend só com Node nativo (sem dependências).",
   "type": "module",
-  "main": "src/userRepository.js",
+  "main": "server/index.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node --no-warnings server/index.js",
+    "dev": "node --no-warnings --watch server/index.js",
     "test": "node --test"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.5"
   },
   "license": "MIT"
 }

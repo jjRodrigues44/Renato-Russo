@@ -1,7 +1,5 @@
 node_modules/
 *.log
-
-# Dados reais de usuarios nao vao para o controle de versao.
-data/users.json
-data/*.json
-!data/.gitkeep
+/data/
+/tmp/
+.DS_Store

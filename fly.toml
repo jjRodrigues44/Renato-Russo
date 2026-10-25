@@ -1,0 +1,24 @@
+# Deploy no Fly.io (tem volume persistente no plano grátis).
+# Passos: ver README. Ajuste "app" para um nome único seu.
+app = "grana-casal"
+primary_region = "gru"
+
+[build]
+
+[env]
+  DATA_DIR = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[mounts]]
+  source = "grana_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
