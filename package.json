@@ -1,0 +1,16 @@
+{
+  "name": "grana-casal",
+  "version": "2.0.0",
+  "description": "Grana — app de contas para casais, com contas reais, convite por código e sincronização em tempo real. Backend e frontend só com Node nativo (sem dependências).",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "dev": "node --no-warnings --watch server/index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "license": "MIT"
+}
