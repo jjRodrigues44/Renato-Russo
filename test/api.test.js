@@ -108,6 +108,47 @@ test("sem token é bloqueado", async () => {
   assert.equal(r.status, 401);
 });
 
+test("comprovantes: anexar, listar, baixar e excluir (compartilhado na casa)", async () => {
+  const ana = (await api("POST", "/api/login", { body: { email: "a@grana.app", password: "senha123" } })).data;
+  const bill = (await api("POST", "/api/bills", { token: ana.token, body: { month: "2026-12", title: "Luz", category: "Contas fixas", amount: 200 } })).data;
+
+  // anexa um "PDF" (bytes crus)
+  const bytes = Buffer.from("%PDF-1.4 comprovante de teste");
+  const up = await fetch(base + "/api/bills/" + bill.id + "/receipts", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + ana.token, "Content-Type": "application/pdf", "X-Filename": encodeURIComponent("comprovante luz.pdf") },
+    body: bytes,
+  });
+  assert.equal(up.status, 201);
+  const meta = await up.json();
+  assert.equal(meta.contentType, "application/pdf");
+  assert.equal(meta.size, bytes.length);
+
+  // aparece em /api/data com os metadados
+  const data = (await api("GET", "/api/data?month=2026-12", { token: ana.token })).data;
+  assert.equal(data.bills[0].receipts.length, 1);
+  assert.equal(data.bills[0].receipts[0].name, "comprovante luz.pdf");
+
+  // a parceira (mesma casa) baixa o arquivo
+  const sarah = (await api("POST", "/api/login", { body: { email: "s@grana.app", password: "senha123" } })).data;
+  const dl = await fetch(base + "/api/receipts/" + meta.id, { headers: { Authorization: "Bearer " + sarah.token } });
+  assert.equal(dl.status, 200);
+  assert.equal(dl.headers.get("content-type"), "application/pdf");
+  assert.equal(Buffer.from(await dl.arrayBuffer()).toString(), bytes.toString());
+
+  // rejeita tipo não permitido
+  const badType = await fetch(base + "/api/bills/" + bill.id + "/receipts", {
+    method: "POST", headers: { Authorization: "Bearer " + ana.token, "Content-Type": "text/plain" }, body: "oi",
+  });
+  assert.equal(badType.status, 400);
+
+  // excluir
+  const del = await api("DELETE", "/api/receipts/" + meta.id, { token: ana.token });
+  assert.equal(del.status, 200);
+  const after = (await api("GET", "/api/data?month=2026-12", { token: ana.token })).data;
+  assert.equal(after.bills[0].receipts.length, 0);
+});
+
 test("tempo real: parceira recebe evento quando a outra grava", async () => {
   const ana = (await api("POST", "/api/login", { body: { email: "a@grana.app", password: "senha123" } })).data;
   // abre SSE como Ana

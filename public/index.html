@@ -349,6 +349,16 @@ h1,h2,p{ margin:0 }
 [hidden]{display:none!important} img{max-width:100%}
 .invite{ margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap }
 .invite .code{ font-family:var(--display); font-size:22px; font-weight:700; letter-spacing:.15em; padding:6px 14px; border-radius:12px; background:var(--accent-soft); color:var(--accent-ink) }
+.rlist{ display:flex; flex-direction:column; gap:10px; margin-bottom:4px }
+.rcp{ display:flex; align-items:center; gap:12px; padding:8px; border:1px solid var(--line); border-radius:14px }
+.rthumb{ width:48px; height:48px; flex:none; border-radius:10px; overflow:hidden; background:var(--s2); display:grid; place-items:center; color:var(--muted) }
+.rthumb img{ width:100%; height:100%; object-fit:cover; display:block }
+.rcp .grow{ flex:1; min-width:0 }
+.rcp .t{ font-size:15px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.rcp .s{ margin-top:2px; font-size:13px; color:var(--muted) }
+.clipbtn{ position:relative } .clipbtn.has{ color:var(--primary) }
+.rcount{ position:absolute; top:0; right:0; min-width:15px; height:15px; padding:0 3px; border-radius:99px; background:var(--primary); color:#fff; font-size:10px; font-weight:700; display:grid; place-items:center }
+.grp-body .row,.cat-body .row{ gap:6px }
 </style>
 </head>
 <body>
@@ -403,6 +413,8 @@ var ART = {frida:"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1B
   function label(k){ var a=k.split("-").map(Number); return {name:MONTHS[a[1]-1],year:a[0]}; }
   var CATS={ "Casa":"home","Contas fixas":"home","Alimentação":"bag","Transporte":"car","Saúde":"heart","Lazer":"spark","Cartão de crédito":"card","Investimentos":"trend","Seguros":"shield","Outros":"dots" };
   function icon(name,size){ return '<svg class="ico '+(size||"")+'" viewBox="0 0 24 24" aria-hidden="true">'+(ICONS[name]||"")+'</svg>'; }
+  try{ ICONS.clip='<path d="M21 11.5 12.6 20a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.6 1.6 0 0 1-2.3-2.3l7.8-7.8"/>'; ICONS.doc='<path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4"/><path d="M9 13h6M9 17h6"/>'; }catch(e){}
+  function fmtSize(b){ b=b||0; if(b<1024) return b+" B"; if(b<1048576) return Math.round(b/1024)+" KB"; return (b/1048576).toFixed(1)+" MB"; }
   var AVATARS=[["frida","Frida Kahlo"],["mona","Mona Lisa"],["young","Jovem do século XIX"],["ermine","Dama com Arminho"],["pearl","Moça com Brinco de Pérola"]];
   function avatarId(id){ return ART[id]?id:"frida"; }
   function avatarImg(id){ return '<img src="'+ART[avatarId(id)]+'" alt="">'; }
@@ -445,6 +457,7 @@ var ART = {frida:"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1B
     var tail;
     if(asking){ tail='<div class="confirm"><span>Excluir?</span><button class="btn sm danger" data-act="del" data-id="'+esc(b.id)+'">Excluir</button><button class="btn sm ghost" data-act="canceldel">Cancelar</button></div>'; }
     else { tail='<p class="amount num">'+money(b.amount)+"</p>";
+      if(opts.edit&&(b.paid||(b.receipts&&b.receipts.length))){ var rc=(b.receipts&&b.receipts.length)||0; tail+='<button class="iconbtn clipbtn'+(rc?" has":"")+'" data-act="receipts" data-id="'+esc(b.id)+'" aria-label="Comprovantes de '+esc(b.title)+'">'+icon("clip","s4")+(rc?'<span class="rcount">'+rc+"</span>":"")+"</button>"; }
       if(opts.edit) tail+='<button class="iconbtn" data-act="editbill" data-id="'+esc(b.id)+'" aria-label="Editar '+esc(b.title)+'">'+icon("edit","s4")+"</button>";
       if(opts.deletable) tail+='<button class="iconbtn bad" data-act="askdel" data-id="'+esc(b.id)+'" aria-label="Excluir '+esc(b.title)+'">'+icon("trash","s4")+"</button>"; }
     return '<div class="row'+(b.paid?" paid":"")+'"><button class="check" data-act="toggle" data-id="'+esc(b.id)+'" aria-pressed="'+b.paid+'" aria-label="'+(b.paid?"Marcar "+esc(b.title)+" como pendente":"Marcar "+esc(b.title)+" como paga")+'"><span class="box">'+icon("check","s3")+'</span></button><div class="grow"><p class="t">'+esc(b.title)+"</p>"+sub+"</div>"+tail+"</div>";
@@ -614,6 +627,14 @@ var ART = {frida:"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1B
     } else if(S.modal==="import"){
       var impM=label(S.modalMonth||monthKey());
       inner=sheetHead("Importar contas","Cole sua lista. As contas entram em "+impM.name+" de "+impM.year+".",true)+'<form class="form" data-form="import" novalidate><div class="field"><label for="f-bulk">Sua lista</label><textarea id="f-bulk" class="inp area" name="bulk" placeholder="Cole aqui suas contas, uma por linha…"></textarea><p class="hint">Linhas com 🆗️ entram como pagas. A categoria é detectada pelo nome.</p></div>'+err+'<button class="btn wide" type="submit"'+(S.saving?" disabled":"")+">Importar</button></form>";
+    } else if(S.modal==="receipts"){
+      var rmk=S.modalMonth||monthKey();
+      var rbill=billsOf(rmk).filter(function(x){return x.id===S.receiptBill;})[0]||{receipts:[]};
+      var T=encodeURIComponent(S.token||"");
+      var recs=(rbill.receipts||[]).map(function(r){ var img=(r.contentType||"").indexOf("image/")===0; var url="/api/receipts/"+r.id+"?token="+T;
+        return '<div class="rcp"><a class="rthumb'+(img?"":" doc")+'" href="'+url+'" target="_blank" rel="noopener">'+(img?'<img src="'+url+'" alt="">':icon("doc"))+'</a><div class="grow"><p class="t">'+esc(r.name)+'</p><p class="s">'+fmtSize(r.size)+(img?" · imagem":" · PDF")+'</p></div><a class="iconbtn" href="'+url+'" target="_blank" rel="noopener" aria-label="Ver">'+icon("eye","s4")+'</a><button class="iconbtn bad" data-act="delreceipt" data-id="'+esc(r.id)+'" aria-label="Excluir">'+icon("trash","s4")+"</button></div>"; }).join("");
+      var listHtml=recs?('<div class="rlist">'+recs+"</div>"):'<p class="note">Nenhum comprovante ainda. Anexe a imagem ou o PDF do pagamento.</p>';
+      inner=sheetHead("Comprovantes",(rbill.title||"")+" · imagem ou PDF",true)+(S.formError?'<p class="err">'+esc(S.formError)+"</p>":"")+listHtml+'<label class="btn wide tonal" style="margin-top:12px;cursor:pointer">'+icon("plus","s4")+(S.saving?"Enviando…":"Adicionar comprovante")+'<input type="file" accept="image/*,application/pdf" data-upload hidden'+(S.saving?" disabled":"")+"></label>";
     } else {
       inner=sheetHead("Editar nome","Como o Grana deve chamar você.",true)+'<form class="form" data-form="name" novalidate><div class="field"><label for="f-name">Nome</label><input id="f-name" class="inp" name="name" maxlength="60" value="'+esc(S.me&&S.me.name||"")+'" autocomplete="off" required></div>'+err+'<button class="btn wide" type="submit">Salvar</button></form>';
     }
@@ -711,6 +732,8 @@ var ART = {frida:"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1B
       case "tab": S.tab=el.getAttribute("data-tab"); S.openMonth=null; S.confirmDel=null; if(S.tab==="contas"){ S.viewMonth=monthKey(); loadMonth(S.viewMonth).then(render).catch(function(){}); } if(S.tab==="historico") loadHistory().then(render); render(); window.scrollTo(0,0); break;
       case "addbill": openModal("bill"); break;
       case "editbill": openModal("bill",id); break;
+      case "receipts": S.receiptBill=id; S.modal="receipts"; S.formError=null; S.saving=false; S.modalMonth=(S.tab==="contas"&&S.viewMonth)?S.viewMonth:monthKey(); renderModal(); break;
+      case "delreceipt": { var rdmk=S.modalMonth||monthKey(); api("DELETE","/api/receipts/"+id).then(function(){ return loadMonth(rdmk); }).then(function(){ renderModal(); loadHistory(); }).catch(function(e){ toast((e&&e.error)||"Erro"); }); break; }
       case "income": openModal("income"); break;
       case "editname": openModal("name"); break;
       case "join": openModal("join"); break;
@@ -736,6 +759,11 @@ var ART = {frida:"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1B
       case "authmode": S.authMode=S.authMode==="signup"?"login":"signup"; S.authError=null; render(); break;
       case "logout": try{localStorage.removeItem("grana:token");}catch(e){} if(S._es){try{S._es.close();}catch(e){}} S.token=null; S.me=null; S.household=null; S.members=[]; S.cache={}; S.history=[]; S.tab="inicio"; S.phase="signedout"; S.authMode="login"; render(); break;
     }
+  });
+  document.addEventListener("change", function(ev){ var inp=ev.target; if(!inp||!inp.matches||!inp.matches("input[data-upload]")) return; var file=inp.files&&inp.files[0]; if(!file) return; if(file.size>8*1024*1024){ toast("Arquivo muito grande (máx 8 MB)"); return; } var billId=S.receiptBill, mk=S.modalMonth||monthKey(); S.saving=true; renderModal();
+    fetch("/api/bills/"+billId+"/receipts",{method:"POST",headers:{Authorization:"Bearer "+S.token,"Content-Type":file.type||"application/octet-stream","X-Filename":encodeURIComponent(file.name||"comprovante")},body:file})
+      .then(function(r){ if(!r.ok) return r.json().catch(function(){return{};}).then(function(j){ throw (j&&j.error?j:{error:"Falha no envio"}); }); return r.json(); })
+      .then(function(){ return loadMonth(mk); }).then(function(){ S.saving=false; renderModal(); loadHistory(); }).catch(function(e){ S.saving=false; renderModal(); toast((e&&e.error)||"Falha no envio"); });
   });
   document.addEventListener("submit", function(ev){ var form=ev.target.closest&&ev.target.closest("[data-form]"); if(!form) return; ev.preventDefault(); submitForm(form); });
   document.addEventListener("keydown", function(ev){ if(ev.key==="Escape"&&S.modal) closeModal(); });

@@ -46,8 +46,20 @@ export function openDb(file) {
       amount REAL,
       PRIMARY KEY (household_id, month)
     );
+    CREATE TABLE IF NOT EXISTS receipts (
+      id TEXT PRIMARY KEY,
+      bill_id TEXT,
+      household_id TEXT,
+      name TEXT,
+      content_type TEXT,
+      size INTEGER,
+      data BLOB,
+      created_at INTEGER
+    );
     CREATE INDEX IF NOT EXISTS idx_bills_hm ON bills (household_id, month);
     CREATE INDEX IF NOT EXISTS idx_users_hh ON users (household_id);
+    CREATE INDEX IF NOT EXISTS idx_receipts_bill ON receipts (bill_id);
+    CREATE INDEX IF NOT EXISTS idx_receipts_hh ON receipts (household_id);
   `);
   return db;
 }

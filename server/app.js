@@ -148,6 +148,9 @@ export function createApp({ dbFile, dataDir }) {
         if (req.method === "GET" && path === "/api/history") return getHistory(req, res, u);
         if (req.method === "POST" && path === "/api/bills") return createBill(req, res, u);
         if (req.method === "PATCH" && path.startsWith("/api/bills/")) return patchBill(req, res, u, path.slice(11));
+        if (req.method === "POST" && path.startsWith("/api/bills/") && path.endsWith("/receipts")) return addReceipt(req, res, u, path.slice(11, path.length - 9));
+        if (req.method === "GET" && path.startsWith("/api/receipts/")) return getReceipt(req, res, u, path.slice(14));
+        if (req.method === "DELETE" && path.startsWith("/api/receipts/")) return delReceipt(req, res, u, path.slice(14));
         if (req.method === "DELETE" && path.startsWith("/api/bills/")) return deleteBill(req, res, u, path.slice(11));
         if (req.method === "PUT" && path === "/api/income") return putIncome(req, res, u);
         if (req.method === "PATCH" && path === "/api/profile") return patchProfile(req, res, u);
@@ -224,7 +227,10 @@ export function createApp({ dbFile, dataDir }) {
   function getData(req, res, u, url) {
     const month = String(url.searchParams.get("month") || "").trim();
     if (!/^\d{4}-\d{2}$/.test(month)) return send(res, 400, { error: "Mês inválido" });
-    const bills = q.billsOf.all(u.household_id, month).map(serializeBill);
+    const recs = db.prepare("SELECT id,bill_id,name,content_type,size FROM receipts WHERE household_id = ?").all(u.household_id);
+    const byBill = {};
+    recs.forEach((r) => { (byBill[r.bill_id] = byBill[r.bill_id] || []).push({ id: r.id, name: r.name, contentType: r.content_type, size: r.size }); });
+    const bills = q.billsOf.all(u.household_id, month).map((b) => Object.assign(serializeBill(b), { receipts: byBill[b.id] || [] }));
     const incRow = q.income.get(u.household_id, month);
     const carried = incRow ? null : q.incomesUpTo.get(u.household_id, month);
     const income = incRow ? incRow.amount : carried ? carried.amount : 0;
@@ -327,6 +333,49 @@ export function createApp({ dbFile, dataDir }) {
     });
     out.sort((a, b) => b.month.localeCompare(a.month));
     return send(res, 200, out);
+  }
+
+  function readRaw(req, max) {
+    return new Promise((resolve, reject) => {
+      const chunks = []; let len = 0;
+      req.on("data", (c) => { len += c.length; if (len > max) { reject(new Error("too_large")); req.destroy(); return; } chunks.push(c); });
+      req.on("end", () => resolve(Buffer.concat(chunks)));
+      req.on("error", reject);
+    });
+  }
+  async function addReceipt(req, res, u, billId) {
+    const bill = q.billById.get(billId);
+    if (!bill || bill.household_id !== u.household_id) return send(res, 404, { error: "Conta não encontrada" });
+    const ct = (req.headers["content-type"] || "application/octet-stream").split(";")[0].trim();
+    if (!(ct.startsWith("image/") || ct === "application/pdf")) return send(res, 400, { error: "Envie uma imagem ou um PDF" });
+    let buf;
+    try { buf = await readRaw(req, 8 * 1024 * 1024); }
+    catch { return send(res, 413, { error: "Arquivo muito grande (máximo 8 MB)" }); }
+    if (!buf.length) return send(res, 400, { error: "Arquivo vazio" });
+    const name = decodeURIComponent(req.headers["x-filename"] || "comprovante").slice(0, 120);
+    const id = uid(); const now = Date.now();
+    db.prepare("INSERT INTO receipts (id,bill_id,household_id,name,content_type,size,data,created_at) VALUES (?,?,?,?,?,?,?,?)")
+      .run(id, billId, u.household_id, name, ct, buf.length, buf, now);
+    broadcast(u.household_id);
+    return send(res, 201, { id, billId, name, contentType: ct, size: buf.length });
+  }
+  function getReceipt(req, res, u, id) {
+    const r = db.prepare("SELECT * FROM receipts WHERE id = ?").get(id);
+    if (!r || r.household_id !== u.household_id) return send(res, 404, { error: "Não encontrado" });
+    res.writeHead(200, {
+      "Content-Type": r.content_type,
+      "Content-Length": r.size,
+      "Content-Disposition": 'inline; filename="' + encodeURIComponent(r.name) + '"',
+      "Cache-Control": "private, max-age=3600",
+    });
+    return res.end(Buffer.from(r.data));
+  }
+  function delReceipt(req, res, u, id) {
+    const r = db.prepare("SELECT household_id FROM receipts WHERE id = ?").get(id);
+    if (!r || r.household_id !== u.household_id) return send(res, 404, { error: "Não encontrado" });
+    db.prepare("DELETE FROM receipts WHERE id = ?").run(id);
+    broadcast(u.household_id);
+    return send(res, 200, { ok: true });
   }
 
   function events(req, res, u) {
